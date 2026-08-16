@@ -86,7 +86,7 @@ echo
 
 PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
 
-REGION=$(ask "Cloud Run / Artifact Registry region")
+REGION="us-east4"
 
 FIRESTORE_LOCATION=$(ask "Firestore database location")
 
@@ -631,23 +631,11 @@ fi
 
 echo
 echo
-echo "╔════════════════════════════════════════════════════════════╗"
-echo "║                                                            ║"
-echo "║             🎉🎉🎉  L A B   C O M P L E T E  🎉🎉🎉       ║"
-echo "║                                                            ║"
-echo "║                  ✅ ALL TASKS COMPLETED                    ║"
-echo "║                                                            ║"
-echo "║                     SCORE: 100/100                         ║"
-echo "║                                                            ║"
-echo "║                🚀 DEPLOYMENT SUCCESSFUL 🚀                ║"
-echo "║                                                            ║"
-echo "╚════════════════════════════════════════════════════════════╝"
-echo
-echo "                 🔥 SUBSCRIBE KARLO YAAR 🔥"
-echo
 echo "============================================================"
-echo "                    FINAL LAB DETAILS"
+echo "          🎉 LAB AUTOMATION COMPLETE 🎉"
 echo "============================================================"
+echo
+echo "                 FAAAAAAAAHHHH"
 echo
 echo "Project ID:"
 echo "$PROJECT_ID"
@@ -686,9 +674,21 @@ echo "⚠️ IMPORTANT:"
 echo "The Google Skills grader must still be checked from"
 echo "the lab page using 'Check my progress'."
 echo
-echo "============================================================"
-echo "          🎉 LAB AUTOMATION COMPLETE 🎉"
-echo "============================================================"
+echo "╔════════════════════════════════════════════════════════════╗"
+echo "║                                                            ║"
+echo "║             🎉🎉🎉  L A B   C O M P L E T E  🎉🎉🎉       ║"
+echo "║                                                            ║"
+echo "║                  ✅ ALL TASKS COMPLETED                    ║"
+echo "║                                                            ║"
+echo "║                     SCORE: 100/100                         ║"
+echo "║                                                            ║"
+echo "║                🚀 DEPLOYMENT SUCCESSFUL 🚀                ║"
+echo "║                                                            ║"
+echo "╚════════════════════════════════════════════════════════════╝"
 echo
-echo "                 FAAAAAAAAHHHH"
+echo "                 🔥 SUBSCRIBE KARLO YAAR 🔥"
+echo
+echo "============================================================"
+echo "                    FINAL LAB DETAILS"
+echo "============================================================"
 echo
