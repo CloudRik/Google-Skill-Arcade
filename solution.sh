@@ -94,7 +94,6 @@ echo
 echo "------------------------------------------------------------"
 echo "Project : $PROJECT_ID"
 echo "Region  : $REGION"
-echo "Zone    : $ZONE"
 echo "Firestore location : $FIRESTORE_LOCATION"
 echo "------------------------------------------------------------"
 echo
