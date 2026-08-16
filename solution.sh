@@ -86,9 +86,7 @@ echo
 
 PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
 
-REGION=$(ask "Cloud Run / Artifact Registry region" "us-east4")
-
-
+REGION=$(ask "Cloud Run / Artifact Registry region")
 
 FIRESTORE_LOCATION=$(ask "Firestore database location")
 
