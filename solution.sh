@@ -178,7 +178,26 @@ echo "  TASK 1 - CREATE FIRESTORE DATABASE"
 echo "============================================================"
 
 if gcloud firestore databases describe "(default)" >/dev/null 2>&1; then
+  EXISTING_FIRESTORE_LOCATION=$(gcloud firestore databases describe "(default)" \
+    --format='value(locationId)')
+
+  EXISTING_FIRESTORE_TYPE=$(gcloud firestore databases describe "(default)" \
+    --format='value(type)')
+
   echo "ℹ️ Firestore (default) database already exists."
+  echo "   Location: $EXISTING_FIRESTORE_LOCATION"
+  echo "   Type    : $EXISTING_FIRESTORE_TYPE"
+
+  if [[ "$EXISTING_FIRESTORE_LOCATION" != "$FIRESTORE_LOCATION" ]]; then
+    fail "Firestore already exists in '$EXISTING_FIRESTORE_LOCATION', but '$FIRESTORE_LOCATION' was requested."
+  fi
+
+  if [[ "$EXISTING_FIRESTORE_TYPE" != "FIRESTORE_NATIVE" ]]; then
+    fail "Existing Firestore database is not in FIRESTORE_NATIVE mode."
+  fi
+
+  echo "✅ Existing Firestore database matches requested configuration."
+
 else
   echo "Creating Firestore Native database..."
 
@@ -266,10 +285,21 @@ if [[ ! -f "netflix_titles_original.csv" ]]; then
 fi
 
 echo
-echo "Importing Netflix dataset into Firestore..."
-run node index.js netflix_titles_original.csv
+echo
+echo "Checking Firestore dataset..."
 
-echo "✅ Netflix dataset import completed."
+EXISTING_DOC_COUNT=$(gcloud firestore documents list data \
+  --limit=1 \
+  --format='value(name)' 2>/dev/null | wc -l || true)
+
+if [[ "$EXISTING_DOC_COUNT" -gt 0 ]]; then
+  echo "ℹ️ Firestore 'data' collection already contains documents."
+  echo "ℹ️ Skipping Netflix dataset import."
+else
+  echo "Importing Netflix dataset into Firestore..."
+  run node index.js netflix_titles_original.csv
+  echo "✅ Netflix dataset import completed."
+fi
 
 # ------------------------------------------------------------
 # TASK 3 - REST API v0.1
@@ -655,10 +685,16 @@ echo "Go back to the Google Skills Lab page and press"
 echo "'Check my progress' for each task if the lab UI"
 echo "has not automatically refreshed."
 echo
-echo "Expected final score: 100/100"
+echo "Expected lab score: 100/100"
+echo
+echo "⚠️ IMPORTANT:"
+echo "The Google Skills grader must still be checked from"
+echo "the lab page using 'Check my progress'."
 echo
 echo "============================================================"
-echo "              🚀 LAB AUTOMATION FINISHED 🚀"
+echo "          🎉 LAB AUTOMATION COMPLETE 🎉"
 echo "============================================================"
+echo
+echo "                 FAAAAAAAAHHHH"
 echo
 ```
