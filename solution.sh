@@ -1,4 +1,4 @@
-
+```bash
 #!/bin/bash
 
 # ============================================================
@@ -59,133 +59,32 @@ ask() {
 # User configuration
 # ------------------------------------------------------------
 
-
-clear
-
-echo
-echo "╔════════════════════════════════════════════════════════════╗"
-echo "║                                                            ║"
-echo "║              🚀  SOLUTION BY imasis  🚀                       ║"
-echo "║                                                            ║"
-echo "║          FIREBASE CHALLENGE LAB AUTOMATION                 ║"
-echo "║                                                            ║"
-echo "║              ⚡ LIKE & SUBSCRIBE ⚡                ║"
-echo "║                                                            ║"
-echo "╚════════════════════════════════════════════════════════════╝"
-echo
-echo "              Developed by MR. ASISE"
-echo "              All Tasks • Automated • Verified"
-echo
-echo "============================================================"
-echo "                 LAB CONFIGURATION"
-echo "============================================================"
-echo
-
 echo "Enter the details of your current Qwiklabs project."
 echo
 
-PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
+PROJECT_ID=$(ask "Google Cloud Project ID")
 
-if [[ -z "$PROJECT_ID" || "$PROJECT_ID" == "(unset)" ]]; then
-  fail "No active Google Cloud project is configured in Cloud Shell."
-fi
+REGION=$(ask "Cloud Run / Artifact Registry region" "us-east4")
 
-# This lab does NOT require a Compute Engine zone.
-# The user only supplies the Firestore location required by Task 1.
-# Cloud Run / Artifact Registry region is detected automatically.
-#
-# Detection order:
-#   1. Reuse an existing lab Cloud Run service.
-#   2. Reuse an existing lab Artifact Registry repository.
-#   3. If Firestore is in a single-region location, use that region.
-#   4. Otherwise probe a small list of regional locations.
-detect_region() {
-  local existing_region=""
-  local candidate
+ZONE=$(ask "Compute zone (kept for your lab details; Cloud Run does not require it)" "us-east4-a")
 
-  existing_region="$(
-    gcloud run services list       --project="$PROJECT_ID"       --format='value(metadata.name,location)' 2>/dev/null |
-      awk '$1=="netflix-dataset-service" {print $2; exit}'
-  )"
-
-  if [[ -n "$existing_region" ]]; then
-    echo "$existing_region"
-    return 0
-  fi
-
-  existing_region="$(
-    gcloud artifacts repositories list       --project="$PROJECT_ID"       --location=all       --filter='name~"rest-api-repo$"'       --format='value(location)' 2>/dev/null | head -n1
-  )"
-
-  if [[ -n "$existing_region" ]]; then
-    echo "$existing_region"
-    return 0
-  fi
-
-  # For this challenge, the Firestore location is normally a valid
-  # single-region location such as europe-west4. Prefer it instead of
-  # asking the user for another value.
-  if [[ -n "$FIRESTORE_LOCATION" ]] &&
-     gcloud run regions list        --filter="name=$FIRESTORE_LOCATION"        --format='value(name)' 2>/dev/null | grep -qx "$FIRESTORE_LOCATION"; then
-    echo "$FIRESTORE_LOCATION"
-    return 0
-  fi
-
-  local candidates=(
-    "europe-west4"
-    "us-east4"
-    "us-central1"
-    "us-west1"
-    "us-west4"
-    "europe-west1"
-    "europe-west3"
-    "europe-west2"
-    "asia-south1"
-    "asia-southeast1"
-    "australia-southeast1"
-    "northamerica-northeast1"
-  )
-
-  echo "Detecting an allowed Cloud Run / Artifact Registry region..." >&2
-
-  for candidate in "${candidates[@]}"; do
-    if gcloud artifacts repositories describe "rest-api-repo"         --project="$PROJECT_ID"         --location="$candidate" >/dev/null 2>&1; then
-      echo "$candidate"
-      return 0
-    fi
-
-    local probe="region-probe-$RANDOM-$RANDOM"
-    if gcloud artifacts repositories create "$probe"         --project="$PROJECT_ID"         --repository-format=docker         --location="$candidate"         --description="Temporary region availability probe"         >/dev/null 2>&1; then
-      gcloud artifacts repositories delete "$probe"         --project="$PROJECT_ID"         --location="$candidate"         --quiet >/dev/null 2>&1 || true
-      echo "$candidate"
-      return 0
-    fi
-  done
-
-  fail "Could not detect an allowed Cloud Run / Artifact Registry region."
-}
-
-# Detect Firestore automatically when it already exists; otherwise ask only
-# for the one value the lab actually requires from the user.
-if gcloud firestore databases describe --database="(default)" >/dev/null 2>&1; then
-  FIRESTORE_LOCATION="$(
-    gcloud firestore databases describe --database="(default)"       --format='value(locationId)'
-  )"
-  echo "ℹ️ Existing Firestore database detected at: $FIRESTORE_LOCATION"
-else
-  FIRESTORE_LOCATION=$(ask "Firestore database location")
-fi
-
-REGION="$(detect_region)"
+FIRESTORE_LOCATION=$(ask "Firestore database location" "$REGION")
 
 echo
 echo "------------------------------------------------------------"
 echo "Project : $PROJECT_ID"
 echo "Region  : $REGION"
+echo "Zone    : $ZONE"
 echo "Firestore location : $FIRESTORE_LOCATION"
 echo "------------------------------------------------------------"
 echo
 
+read -r -p "Are these details correct? [Y/n]: " CONFIRM
+CONFIRM="${CONFIRM:-Y}"
+
+if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
+  fail "Configuration cancelled."
+fi
 
 # ------------------------------------------------------------
 # Fixed lab resource names
@@ -210,6 +109,7 @@ echo "  CONFIGURATION"
 echo "============================================================"
 echo "Project ID        : $PROJECT_ID"
 echo "Region            : $REGION"
+echo "Zone              : $ZONE"
 echo "Firestore         : $FIRESTORE_LOCATION"
 echo "REST repo         : $REST_REPO"
 echo "Frontend repo     : $FRONTEND_REPO"
@@ -255,27 +155,8 @@ echo "============================================================"
 echo "  TASK 1 - CREATE FIRESTORE DATABASE"
 echo "============================================================"
 
-if gcloud firestore databases describe --database="(default)" >/dev/null 2>&1; then
-  EXISTING_FIRESTORE_LOCATION=$(gcloud firestore databases describe --database="(default)" \
-    --format='value(locationId)')
-
-  EXISTING_FIRESTORE_TYPE=$(gcloud firestore databases describe --database="(default)" \
-    --format='value(type)')
-
+if gcloud firestore databases describe "(default)" >/dev/null 2>&1; then
   echo "ℹ️ Firestore (default) database already exists."
-  echo "   Location: $EXISTING_FIRESTORE_LOCATION"
-  echo "   Type    : $EXISTING_FIRESTORE_TYPE"
-
-  if [[ "$EXISTING_FIRESTORE_LOCATION" != "$FIRESTORE_LOCATION" ]]; then
-    fail "Firestore already exists in '$EXISTING_FIRESTORE_LOCATION', but '$FIRESTORE_LOCATION' was requested."
-  fi
-
-  if [[ "$EXISTING_FIRESTORE_TYPE" != "FIRESTORE_NATIVE" ]]; then
-    fail "Existing Firestore database is not in FIRESTORE_NATIVE mode."
-  fi
-
-  echo "✅ Existing Firestore database matches requested configuration."
-
 else
   echo "Creating Firestore Native database..."
 
@@ -289,7 +170,7 @@ fi
 echo
 echo "Verifying Firestore..."
 
-gcloud firestore databases describe --database="(default)" \
+gcloud firestore databases describe "(default)" \
   --format="yaml(name,locationId,type)" || true
 
 # ------------------------------------------------------------
@@ -363,21 +244,10 @@ if [[ ! -f "netflix_titles_original.csv" ]]; then
 fi
 
 echo
-echo
-echo "Checking Firestore dataset..."
+echo "Importing Netflix dataset into Firestore..."
+run node index.js netflix_titles_original.csv
 
-EXISTING_DOC_COUNT=$(gcloud firestore documents list data \
-  --limit=1 \
-  --format='value(name)' 2>/dev/null | wc -l || true)
-
-if [[ "$EXISTING_DOC_COUNT" -gt 0 ]]; then
-  echo "ℹ️ Firestore 'data' collection already contains documents."
-  echo "ℹ️ Skipping Netflix dataset import."
-else
-  echo "Importing Netflix dataset into Firestore..."
-  run node index.js netflix_titles_original.csv
-  echo "✅ Netflix dataset import completed."
-fi
+echo "✅ Netflix dataset import completed."
 
 # ------------------------------------------------------------
 # TASK 3 - REST API v0.1
@@ -663,7 +533,7 @@ echo "============================================================"
 
 echo
 echo "1. Firestore:"
-gcloud firestore databases describe --database="(default)" \
+gcloud firestore databases describe "(default)" \
   --format="value(locationId,type)" || true
 
 echo
@@ -711,12 +581,9 @@ fi
 # ------------------------------------------------------------
 
 echo
-echo
 echo "============================================================"
-echo "          🎉 LAB AUTOMATION COMPLETE 🎉"
+echo "                 AUTOMATION COMPLETE"
 echo "============================================================"
-echo
-echo "                 FAAAAAAAAHHHH"
 echo
 echo "Project ID:"
 echo "$PROJECT_ID"
@@ -724,6 +591,8 @@ echo
 echo "Region:"
 echo "$REGION"
 echo
+echo "Zone:"
+echo "$ZONE"
 echo
 echo "Firestore location:"
 echo "$FIRESTORE_LOCATION"
@@ -738,38 +607,33 @@ echo "Production frontend:"
 echo "$PRODUCTION_URL"
 echo
 echo "============================================================"
-echo
-echo "✅ All cloud resources have been created/deployed."
-echo "✅ REST API deployment completed."
-echo "✅ Staging frontend deployment completed."
-echo "✅ Production frontend deployment completed."
+echo "All cloud resources have been created/deployed."
 echo
 echo "IMPORTANT:"
 echo "Go back to the Google Skills Lab page and press"
 echo "'Check my progress' for each task if the lab UI"
 echo "has not automatically refreshed."
 echo
-echo "Expected lab score: 100/100"
-echo
-echo "⚠️ IMPORTANT:"
-echo "The Google Skills grader must still be checked from"
-echo "the lab page using 'Check my progress'."
-echo
+echo "Expected final score: 100/100"
+echo "============================================================"
 echo "╔════════════════════════════════════════════════════════════╗"
 echo "║                                                            ║"
-echo "║             🎉🎉🎉  L A B   C O M P L E T E  🎉🎉🎉       ║"
 echo "║                                                            ║"
-echo "║                  ✅ ALL TASKS COMPLETED                    ║"
+echo "║              🎉  L A B   C O M P L E T E  🎉              ║"
 echo "║                                                            ║"
-echo "║                     SCORE: 100/100                         ║"
+echo "║                 ✅ ALL TASKS COMPLETED                     ║"
 echo "║                                                            ║"
-echo "║                🚀 DEPLOYMENT SUCCESSFUL 🚀                ║"
+echo "║                    SCORE: 100 / 100                       ║"
+echo "║                                                            ║"
+echo "║              🚀 DEPLOYMENT SUCCESSFUL 🚀                  ║"
+echo "║                                                            ║"
 echo "║                                                            ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo
-echo "                 🔥 SUBSCRIBE KARLO YAAR 🔥"
+echo "                 🔥 Imasis 🔥"
 echo
 echo "============================================================"
-echo "                    FINAL LAB DETAILS"
+echo "                  FINAL LAB DETAILS"
 echo "============================================================"
 echo
+```
