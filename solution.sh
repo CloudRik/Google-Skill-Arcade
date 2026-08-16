@@ -86,8 +86,83 @@ echo
 
 PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
 
-REGION="us-east4"
+if [[ -z "$PROJECT_ID" || "$PROJECT_ID" == "(unset)" ]]; then
+  fail "No active Google Cloud project is configured in Cloud Shell."
+fi
 
+# The lab does not require a Compute Engine zone. Cloud Run and Artifact
+# Registry are regional resources, so the script selects one shared region
+# automatically. It first reuses an existing lab service/repository location,
+# then probes common Cloud Run/Artifact Registry regions until it finds one
+# accepted by the current project's organization policy.
+detect_region() {
+  local existing_region=""
+  local candidate
+
+  # Reuse an already-created lab service when the script is being resumed.
+  existing_region="$(
+    gcloud run services list       --project="$PROJECT_ID"       --format='value(metadata.name,location)' 2>/dev/null |
+      awk '$1=="netflix-dataset-service" {print $2; exit}'
+  )"
+
+  if [[ -n "$existing_region" ]]; then
+    echo "$existing_region"
+    return 0
+  fi
+
+  # Reuse an existing lab repository if present.
+  existing_region="$(
+    gcloud artifacts repositories list       --project="$PROJECT_ID"       --location=all       --filter='name~"rest-api-repo$"'       --format='value(location)' 2>/dev/null | head -n1
+  )"
+
+  if [[ -n "$existing_region" ]]; then
+    echo "$existing_region"
+    return 0
+  fi
+
+  # Preferred regions for this lab. We probe the actual Artifact Registry
+  # creation path so organization-location policies are respected instead
+  # of assuming that every Qwiklabs project allows us-east4.
+  local candidates=(
+    "us-east4"
+    "us-central1"
+    "us-west1"
+    "us-west4"
+    "europe-west4"
+    "europe-west1"
+    "europe-west3"
+    "europe-west2"
+    "asia-south1"
+    "asia-southeast1"
+    "australia-southeast1"
+    "northamerica-northeast1"
+  )
+
+  echo "Detecting an allowed Cloud Run / Artifact Registry region..." >&2
+
+  for candidate in "${candidates[@]}"; do
+    if gcloud artifacts repositories describe "rest-api-repo"         --project="$PROJECT_ID"         --location="$candidate" >/dev/null 2>&1; then
+      echo "$candidate"
+      return 0
+    fi
+
+    # A temporary probe is created only when the repository does not exist.
+    # If organization policy rejects the location, try the next candidate.
+    local probe="region-probe-$RANDOM-$RANDOM"
+
+    if gcloud artifacts repositories create "$probe"         --project="$PROJECT_ID"         --repository-format=docker         --location="$candidate"         --description="Temporary region availability probe"         >/dev/null 2>&1; then
+      gcloud artifacts repositories delete "$probe"         --project="$PROJECT_ID"         --location="$candidate"         --quiet >/dev/null 2>&1 || true
+      echo "$candidate"
+      return 0
+    fi
+  done
+
+  fail "Could not find an Artifact Registry/Cloud Run region allowed for this Qwiklabs project."
+}
+
+REGION="$(detect_region)"
+
+# Only the lab-specific Firestore location is requested from the user.
 FIRESTORE_LOCATION=$(ask "Firestore database location")
 
 echo
@@ -173,11 +248,11 @@ echo "============================================================"
 echo "  TASK 1 - CREATE FIRESTORE DATABASE"
 echo "============================================================"
 
-if gcloud firestore databases describe "(default)" >/dev/null 2>&1; then
-  EXISTING_FIRESTORE_LOCATION=$(gcloud firestore databases describe "(default)" \
+if gcloud firestore databases describe --database="(default)" >/dev/null 2>&1; then
+  EXISTING_FIRESTORE_LOCATION=$(gcloud firestore databases describe --database="(default)" \
     --format='value(locationId)')
 
-  EXISTING_FIRESTORE_TYPE=$(gcloud firestore databases describe "(default)" \
+  EXISTING_FIRESTORE_TYPE=$(gcloud firestore databases describe --database="(default)" \
     --format='value(type)')
 
   echo "ℹ️ Firestore (default) database already exists."
@@ -207,7 +282,7 @@ fi
 echo
 echo "Verifying Firestore..."
 
-gcloud firestore databases describe "(default)" \
+gcloud firestore databases describe --database="(default)" \
   --format="yaml(name,locationId,type)" || true
 
 # ------------------------------------------------------------
@@ -581,7 +656,7 @@ echo "============================================================"
 
 echo
 echo "1. Firestore:"
-gcloud firestore databases describe "(default)" \
+gcloud firestore databases describe --database="(default)" \
   --format="value(locationId,type)" || true
 
 echo
