@@ -84,13 +84,13 @@ echo
 echo "Enter the details of your current Qwiklabs project."
 echo
 
-PROJECT_ID=$(ask "Google Cloud Project ID")
+PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
 
 REGION=$(ask "Cloud Run / Artifact Registry region" "us-east4")
 
-ZONE=$(ask "Compute zone (kept for your lab details; Cloud Run does not require it)" "us-east4-a")
 
-FIRESTORE_LOCATION=$(ask "Firestore database location" "$REGION")
+
+FIRESTORE_LOCATION=$(ask "Firestore database location")
 
 echo
 echo "------------------------------------------------------------"
@@ -131,7 +131,6 @@ echo "  CONFIGURATION"
 echo "============================================================"
 echo "Project ID        : $PROJECT_ID"
 echo "Region            : $REGION"
-echo "Zone              : $ZONE"
 echo "Firestore         : $FIRESTORE_LOCATION"
 echo "REST repo         : $REST_REPO"
 echo "Frontend repo     : $FRONTEND_REPO"
@@ -658,8 +657,6 @@ echo
 echo "Region:"
 echo "$REGION"
 echo
-echo "Zone:"
-echo "$ZONE"
 echo
 echo "Firestore location:"
 echo "$FIRESTORE_LOCATION"
