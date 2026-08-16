@@ -90,16 +90,19 @@ if [[ -z "$PROJECT_ID" || "$PROJECT_ID" == "(unset)" ]]; then
   fail "No active Google Cloud project is configured in Cloud Shell."
 fi
 
-# The lab does not require a Compute Engine zone. Cloud Run and Artifact
-# Registry are regional resources, so the script selects one shared region
-# automatically. It first reuses an existing lab service/repository location,
-# then probes common Cloud Run/Artifact Registry regions until it finds one
-# accepted by the current project's organization policy.
+# This lab does NOT require a Compute Engine zone.
+# The user only supplies the Firestore location required by Task 1.
+# Cloud Run / Artifact Registry region is detected automatically.
+#
+# Detection order:
+#   1. Reuse an existing lab Cloud Run service.
+#   2. Reuse an existing lab Artifact Registry repository.
+#   3. If Firestore is in a single-region location, use that region.
+#   4. Otherwise probe a small list of regional locations.
 detect_region() {
   local existing_region=""
   local candidate
 
-  # Reuse an already-created lab service when the script is being resumed.
   existing_region="$(
     gcloud run services list       --project="$PROJECT_ID"       --format='value(metadata.name,location)' 2>/dev/null |
       awk '$1=="netflix-dataset-service" {print $2; exit}'
@@ -110,7 +113,6 @@ detect_region() {
     return 0
   fi
 
-  # Reuse an existing lab repository if present.
   existing_region="$(
     gcloud artifacts repositories list       --project="$PROJECT_ID"       --location=all       --filter='name~"rest-api-repo$"'       --format='value(location)' 2>/dev/null | head -n1
   )"
@@ -120,15 +122,21 @@ detect_region() {
     return 0
   fi
 
-  # Preferred regions for this lab. We probe the actual Artifact Registry
-  # creation path so organization-location policies are respected instead
-  # of assuming that every Qwiklabs project allows us-east4.
+  # For this challenge, the Firestore location is normally a valid
+  # single-region location such as europe-west4. Prefer it instead of
+  # asking the user for another value.
+  if [[ -n "$FIRESTORE_LOCATION" ]] &&
+     gcloud run regions list        --filter="name=$FIRESTORE_LOCATION"        --format='value(name)' 2>/dev/null | grep -qx "$FIRESTORE_LOCATION"; then
+    echo "$FIRESTORE_LOCATION"
+    return 0
+  fi
+
   local candidates=(
+    "europe-west4"
     "us-east4"
     "us-central1"
     "us-west1"
     "us-west4"
-    "europe-west4"
     "europe-west1"
     "europe-west3"
     "europe-west2"
@@ -146,10 +154,7 @@ detect_region() {
       return 0
     fi
 
-    # A temporary probe is created only when the repository does not exist.
-    # If organization policy rejects the location, try the next candidate.
     local probe="region-probe-$RANDOM-$RANDOM"
-
     if gcloud artifacts repositories create "$probe"         --project="$PROJECT_ID"         --repository-format=docker         --location="$candidate"         --description="Temporary region availability probe"         >/dev/null 2>&1; then
       gcloud artifacts repositories delete "$probe"         --project="$PROJECT_ID"         --location="$candidate"         --quiet >/dev/null 2>&1 || true
       echo "$candidate"
@@ -157,13 +162,21 @@ detect_region() {
     fi
   done
 
-  fail "Could not find an Artifact Registry/Cloud Run region allowed for this Qwiklabs project."
+  fail "Could not detect an allowed Cloud Run / Artifact Registry region."
 }
 
-REGION="$(detect_region)"
+# Detect Firestore automatically when it already exists; otherwise ask only
+# for the one value the lab actually requires from the user.
+if gcloud firestore databases describe --database="(default)" >/dev/null 2>&1; then
+  FIRESTORE_LOCATION="$(
+    gcloud firestore databases describe --database="(default)"       --format='value(locationId)'
+  )"
+  echo "ℹ️ Existing Firestore database detected at: $FIRESTORE_LOCATION"
+else
+  FIRESTORE_LOCATION=$(ask "Firestore database location")
+fi
 
-# Only the lab-specific Firestore location is requested from the user.
-FIRESTORE_LOCATION=$(ask "Firestore database location")
+REGION="$(detect_region)"
 
 echo
 echo "------------------------------------------------------------"
@@ -173,12 +186,6 @@ echo "Firestore location : $FIRESTORE_LOCATION"
 echo "------------------------------------------------------------"
 echo
 
-read -r -p "Are these details correct? [Y/n]: " CONFIRM
-CONFIRM="${CONFIRM:-Y}"
-
-if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
-  fail "Configuration cancelled."
-fi
 
 # ------------------------------------------------------------
 # Fixed lab resource names
